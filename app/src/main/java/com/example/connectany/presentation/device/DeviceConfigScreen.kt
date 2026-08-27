@@ -91,7 +91,7 @@ fun DeviceConfigScreen(
     }
     
     // Auto-save effect
-    val keys = listOf(name, macAddress, type, popupStyle, popupColor, duration, imageUri, vibration, showOnConnect, showOnReconnect, showBattery, isEnabled, playSound)
+    val keys = listOf(name, macAddress, type, popupStyle, popupColor, duration, imageUri, vibration, showOnConnect, showOnReconnect, showBattery, isEnabled, playSound, autoLaunchPackage, smartVolumeLevel)
     LaunchedEffect(keys) {
         if (macAddress.isBlank() && initialDevice == null) return@LaunchedEffect
         val mac = macAddress.ifBlank { UUID.randomUUID().toString() }
