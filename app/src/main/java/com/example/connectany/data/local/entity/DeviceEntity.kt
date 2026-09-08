@@ -17,8 +17,9 @@ data class DeviceEntity(
     val showOnDisconnect: Boolean = false,
     val showOnReconnect: Boolean = false,
     val showBattery: Boolean = true,
-    val popupColor: Int = android.graphics.Color.DKGRAY,
+    val popupColor: Int = 0xFF444444.toInt(),
     val playSound: Boolean = false,
     val autoLaunchPackage: String? = null,
-    val smartVolumeLevel: Int? = null
+    val smartVolumeLevel: Int? = null,
+    val showGlow: Boolean = false
 )

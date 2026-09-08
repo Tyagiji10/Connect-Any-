@@ -25,12 +25,17 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import com.example.connectany.presentation.popup.toContrastColor
+import com.example.connectany.data.local.entity.BatteryLogEntity
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DeviceConfigScreen(
     deviceMac: String?,
     initialDevice: DeviceEntity? = null,
+    batteryLogs: List<BatteryLogEntity> = emptyList(),
     onSave: (DeviceEntity) -> Unit,
     onPreview: (DeviceEntity) -> Unit,
     onBack: () -> Unit
@@ -46,16 +51,34 @@ fun DeviceConfigScreen(
     // New Toggles
     var vibration by remember { mutableStateOf(initialDevice?.vibration ?: false) }
     var showOnConnect by remember { mutableStateOf(initialDevice?.showOnConnect ?: true) }
+    var showOnDisconnect by remember { mutableStateOf(initialDevice?.showOnDisconnect ?: false) }
     val showOnReconnect = initialDevice?.showOnReconnect ?: false
     var showBattery by remember { mutableStateOf(initialDevice?.showBattery ?: true) }
     var isEnabled by remember { mutableStateOf(initialDevice?.isEnabled ?: true) }
     val playSound = initialDevice?.playSound ?: false
     var autoLaunchPackage by remember { mutableStateOf<String?>(initialDevice?.autoLaunchPackage) }
     var smartVolumeLevel by remember { mutableStateOf<Int?>(initialDevice?.smartVolumeLevel) }
+    var showGlow by remember { mutableStateOf(initialDevice?.showGlow ?: false) }
     
     var showAppSelector by remember { mutableStateOf(false) }
-    
+
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Live battery level for this device (null = not connected or unsupported)
+    var liveBatteryLevel by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(macAddress) {
+        if (macAddress.isBlank()) return@LaunchedEffect
+        liveBatteryLevel = try {
+            val btManager = context.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            val adapter = btManager?.adapter ?: return@LaunchedEffect
+            @Suppress("DEPRECATION")
+            val device = adapter.getRemoteDevice(macAddress)
+            val method = device.javaClass.getMethod("getBatteryLevel")
+            val level = method.invoke(device) as? Int ?: -1
+            if (level in 0..100) level else null
+        } catch (e: Exception) { null }
+    }
+
     val pm = context.packageManager
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -91,7 +114,7 @@ fun DeviceConfigScreen(
     }
     
     // Auto-save effect
-    val keys = listOf(name, macAddress, type, popupStyle, popupColor, duration, imageUri, vibration, showOnConnect, showOnReconnect, showBattery, isEnabled, playSound, autoLaunchPackage, smartVolumeLevel)
+    val keys = listOf(name, macAddress, type, popupStyle, popupColor, duration, imageUri, vibration, showOnConnect, showOnDisconnect, showOnReconnect, showBattery, isEnabled, playSound, autoLaunchPackage, smartVolumeLevel, showGlow)
     LaunchedEffect(keys) {
         if (macAddress.isBlank() && initialDevice == null) return@LaunchedEffect
         val mac = macAddress.ifBlank { UUID.randomUUID().toString() }
@@ -106,13 +129,14 @@ fun DeviceConfigScreen(
                 durationMs = (duration * 1000).toLong(),
                 vibration = vibration,
                 showOnConnect = showOnConnect,
-                showOnDisconnect = false,
+                showOnDisconnect = showOnDisconnect,
                 showOnReconnect = showOnReconnect,
                 showBattery = showBattery,
                 popupColor = popupColor,
                 playSound = playSound,
                 autoLaunchPackage = autoLaunchPackage,
-                smartVolumeLevel = smartVolumeLevel
+                smartVolumeLevel = smartVolumeLevel,
+                showGlow = showGlow
             )
         )
     }
@@ -148,7 +172,7 @@ fun DeviceConfigScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = Dimensions.Layout.contentMaxWidth)
+                    .fillMaxWidth()
                     .fillMaxHeight()
                     .padding(horizontal = Dimensions.Padding.medium)
                     .verticalScroll(rememberScrollState())
@@ -165,23 +189,53 @@ fun DeviceConfigScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
             
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
+                Column(modifier = Modifier.padding(vertical = 24.dp)) {
                         Text(
                             text = name.ifBlank { "New Device" },
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold
                         )
+                        // Show live battery badge if device is connected and supports it
+                        if (liveBatteryLevel != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            color = when {
+                                                liveBatteryLevel!! >= 60 -> Color(0xFF4CAF50)
+                                                liveBatteryLevel!! >= 30 -> Color(0xFFFF9800)
+                                                else -> Color(0xFFF44336)
+                                            },
+                                            shape = RoundedCornerShape(50)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "🔋 ${liveBatteryLevel}%",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = Color.White
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Connected",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "Art, motion, sound, and when the overlay is allowed to fire.", 
-                            style = MaterialTheme.typography.bodyMedium, 
+                            "Art, motion, sound, and when the overlay is allowed to fire.",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        
+                        if (liveBatteryLevel != null || batteryLogs.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            BatteryDashboard(batteryLogs = batteryLogs, currentLevel = liveBatteryLevel ?: batteryLogs.lastOrNull()?.batteryLevel ?: 100)
+                        }
                         
                         Spacer(modifier = Modifier.height(32.dp))
                         
@@ -202,7 +256,9 @@ fun DeviceConfigScreen(
                         
                         ToggleRow("Vibration", "Uses the device vibrator when the overlay fires.", vibration) { vibration = it }
                         Spacer(modifier = Modifier.height(24.dp))
-                        ToggleRow("Show on connect", "First time this device becomes connected.", showOnConnect) { showOnConnect = it }
+                        ToggleRow("Show on connect", "Show overlay animation when this device connects.", showOnConnect) { showOnConnect = it }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        ToggleRow("Show on disconnect", "Show overlay animation when this device disconnects.", showOnDisconnect) { showOnDisconnect = it }
                         Spacer(modifier = Modifier.height(24.dp))
                         ToggleRow("Show battery", null, showBattery) { showBattery = it }
                         
@@ -340,28 +396,34 @@ fun DeviceConfigScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         
                         // Smart Volume
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Smart Volume Memory", style = MaterialTheme.typography.titleMedium)
-                            if (smartVolumeLevel != null) {
-                                Text("${smartVolumeLevel}%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                            } else {
-                                Text("Disabled", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        var smartVolumeEnabled by remember { mutableStateOf(smartVolumeLevel != null) }
+                        ToggleRow(
+                            title = "Smart Volume Memory",
+                            subtitle = "Auto-set media volume to a saved level when this device connects.",
+                            checked = smartVolumeEnabled,
+                            onCheckedChange = { enabled ->
+                                smartVolumeEnabled = enabled
+                                if (!enabled) smartVolumeLevel = null
+                                else if (smartVolumeLevel == null) smartVolumeLevel = 50
                             }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Slider(
-                            value = (smartVolumeLevel ?: 0).toFloat(),
-                            onValueChange = { smartVolumeLevel = it.roundToInt() },
-                            valueRange = 0f..100f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = if (smartVolumeLevel != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                activeTrackColor = if (smartVolumeLevel != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            )
                         )
-                        if (smartVolumeLevel != null) {
-                            TextButton(onClick = { smartVolumeLevel = null }) {
-                                Text("Disable Smart Volume", color = MaterialTheme.colorScheme.error)
+                        if (smartVolumeEnabled) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Volume level", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${smartVolumeLevel ?: 50}%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Slider(
+                                value = (smartVolumeLevel ?: 50).toFloat(),
+                                onValueChange = { smartVolumeLevel = it.roundToInt() },
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
                         }
                         
                         Spacer(modifier = Modifier.height(32.dp))
@@ -372,10 +434,17 @@ fun DeviceConfigScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             PopupStyleCard("Drop", "A liquid bead rises from the bottom and opens into a card.", popupStyle == "Drop", Modifier.fillMaxWidth()) { popupStyle = "Drop" }
                             PopupStyleCard("Glass", "Frosted panel with a quiet scale-in.", popupStyle == "Glass", Modifier.fillMaxWidth()) { popupStyle = "Glass" }
-                            PopupStyleCard("Magnetic", "Snaps dynamically.", popupStyle == "Magnetic", Modifier.fillMaxWidth()) { popupStyle = "Magnetic" }
                             PopupStyleCard("Gaming", "RGB glowing borders with a futuristic vibe.", popupStyle == "Gaming", Modifier.fillMaxWidth()) { popupStyle = "Gaming" }
                             PopupStyleCard("Minimal", "A tiny toast at the top of the screen.", popupStyle == "Minimal", Modifier.fillMaxWidth()) { popupStyle = "Minimal" }
                         }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        ToggleRow(
+                            title = "Premium Glow Effect",
+                            subtitle = "Show an animated, colored shadow behind the popup window.",
+                            checked = showGlow,
+                            onCheckedChange = { showGlow = it }
+                        )
                         
                         Spacer(modifier = Modifier.height(32.dp))
                         Text("Popup color variation", style = MaterialTheme.typography.titleMedium)
@@ -422,13 +491,14 @@ fun DeviceConfigScreen(
                                         durationMs = (duration * 1000).toLong(),
                                         vibration = vibration,
                                         showOnConnect = showOnConnect,
-                                        showOnDisconnect = false,
+                                        showOnDisconnect = showOnDisconnect,
                                         showOnReconnect = showOnReconnect,
                                         showBattery = showBattery,
                                         popupColor = popupColor,
                                         playSound = playSound,
                                         autoLaunchPackage = autoLaunchPackage,
-                                        smartVolumeLevel = smartVolumeLevel
+                                        smartVolumeLevel = smartVolumeLevel,
+                                        showGlow = showGlow
                                     )
                                 )
                             },
@@ -443,11 +513,86 @@ fun DeviceConfigScreen(
                         
                         Spacer(modifier = Modifier.height(64.dp))
                     }
-                }
             }
         }
     }
     )
+}
+
+@Composable
+fun BatteryDashboard(batteryLogs: List<BatteryLogEntity>, currentLevel: Int) {
+    if (batteryLogs.isEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Battery Health & Usage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Gathering data...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        return
+    }
+
+    val sortedLogs = batteryLogs.sortedBy { it.timestampMs }
+    val firstLog = sortedLogs.first()
+    val lastLog = sortedLogs.last()
+    
+    val timeDiffHours = (lastLog.timestampMs - firstLog.timestampMs) / 3600000.0
+    val batteryDrop = firstLog.batteryLevel - lastLog.batteryLevel
+    
+    val estimatedText = if (timeDiffHours > 0.1 && batteryDrop > 0) {
+        val drainPerHour = batteryDrop / timeDiffHours
+        val hoursLeft = currentLevel / drainPerHour
+        val hours = hoursLeft.toInt()
+        val mins = ((hoursLeft - hours) * 60).toInt()
+        if (hours > 0) "Estimated backup: ${hours}h ${mins}m" else "Estimated backup: ${mins}m"
+    } else {
+        "Gathering more data for estimate..."
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Battery Health & Usage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(estimatedText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Simple Line Graph
+            val graphColor = MaterialTheme.colorScheme.primary
+            Canvas(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+                val path = Path()
+                val minTime = firstLog.timestampMs
+                val maxTime = lastLog.timestampMs
+                val timeRange = maxTime - minTime
+                
+                if (timeRange > 0) {
+                    sortedLogs.forEachIndexed { index, log ->
+                        val x = size.width * ((log.timestampMs - minTime).toFloat() / timeRange.toFloat())
+                        val y = size.height - (size.height * (log.batteryLevel.toFloat() / 100f))
+                        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(
+                        path = path,
+                        color = graphColor,
+                        style = Stroke(width = 4f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${firstLog.batteryLevel}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${lastLog.batteryLevel}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
 }
 
 @Composable

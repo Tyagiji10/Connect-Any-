@@ -70,11 +70,13 @@ fun ConnectAnyNavGraph(viewModel: MainViewModel = hiltViewModel()) {
         composable("device/{address}") { backStackEntry ->
             val address = backStackEntry.arguments?.getString("address")
             var deviceEntity by remember { mutableStateOf<com.example.connectany.data.local.entity.DeviceEntity?>(null) }
+            var batteryLogs by remember { mutableStateOf<List<com.example.connectany.data.local.entity.BatteryLogEntity>>(emptyList()) }
             var isLoading by remember { mutableStateOf(true) }
             
             LaunchedEffect(address) {
                 if (address != null && address != "new") {
                     deviceEntity = viewModel.getDevice(address)
+                    batteryLogs = viewModel.getBatteryLogs(address)
                 }
                 isLoading = false
             }
@@ -87,6 +89,7 @@ fun ConnectAnyNavGraph(viewModel: MainViewModel = hiltViewModel()) {
                 DeviceConfigScreen(
                     deviceMac = address,
                     initialDevice = deviceEntity,
+                    batteryLogs = batteryLogs,
                     onSave = { device ->
                         viewModel.saveDevice(device)
                     },

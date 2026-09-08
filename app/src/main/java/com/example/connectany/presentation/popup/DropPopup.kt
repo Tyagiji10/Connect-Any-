@@ -7,8 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Alignment
@@ -35,6 +34,7 @@ fun DropPopup(
     imageUri: String? = null,
     isConnected: Boolean = true,
     displayDurationMs: Long = 5000L,
+    showGlow: Boolean = false,
     onAnimationComplete: () -> Unit
 ) {
     var animationState by remember { mutableStateOf(PopupAnimationState.HIDDEN) }
@@ -42,18 +42,20 @@ fun DropPopup(
     LaunchedEffect(Unit) {
         animationState = PopupAnimationState.ENTERING
         delay(400) // Entrance duration
-        animationState = PopupAnimationState.VISIBLE
+        if (animationState == PopupAnimationState.ENTERING) {
+            animationState = PopupAnimationState.VISIBLE
+        }
         delay((displayDurationMs - 700L).coerceAtLeast(0L)) // Hold for configured time minus entrance+exit
-        animationState = PopupAnimationState.EXITING
-        delay(300) // Exit duration
-        animationState = PopupAnimationState.HIDDEN
-        onAnimationComplete()
+        if (animationState == PopupAnimationState.VISIBLE) {
+            animationState = PopupAnimationState.EXITING
+        }
     }
 
-    val haptic = LocalHapticFeedback.current
     LaunchedEffect(animationState) {
-        if (animationState == PopupAnimationState.VISIBLE) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (animationState == PopupAnimationState.EXITING) {
+            delay(300) // Exit duration
+            animationState = PopupAnimationState.HIDDEN
+            onAnimationComplete()
         }
     }
 
@@ -103,11 +105,22 @@ fun DropPopup(
         }
     }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "glowAlpha")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "glowAlpha"
+    )
+
     Box(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .wrapContentHeight()
             .safeDrawingPadding()
-            .padding(bottom = Dimensions.Padding.xlarge),
+            .padding(top = 64.dp, bottom = Dimensions.Padding.xlarge),
         contentAlignment = Alignment.BottomCenter
     ) {
         if (animationState != PopupAnimationState.HIDDEN) {
@@ -129,11 +142,18 @@ fun DropPopup(
                         this.scaleX = scale
                         this.scaleY = scale
                     }
-                    .shadow(
-                        elevation = 24.dp,
-                        shape = RoundedCornerShape(28.dp),
-                        spotColor = Color.Black,
-                        ambientColor = Color.Black
+                    .then(
+                        if (showGlow) Modifier.glow(
+                            color = theme.dropBackground,
+                            alpha = glowAlpha,
+                            borderRadius = 28.dp,
+                            glowRadius = 32.dp
+                        ) else Modifier.shadow(
+                            elevation = 24.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            spotColor = Color.Black,
+                            ambientColor = Color.Black
+                        )
                     )
                     .background(
                         color = theme.dropBackground,
@@ -174,7 +194,8 @@ fun DropPopup(
                     PopupRightContent(
                         batteryLevel = batteryLevel,
                         textColor = contrastColor.copy(alpha = 0.8f),
-                        arrowBgColor = contrastColor.copy(alpha = 0.08f)
+                        arrowBgColor = contrastColor.copy(alpha = 0.08f),
+                        isConnected = isConnected
                     )
                 }
             }

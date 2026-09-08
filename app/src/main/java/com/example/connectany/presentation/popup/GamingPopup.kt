@@ -8,8 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Alignment
@@ -33,6 +32,7 @@ fun GamingPopup(
     imageUri: String? = null,
     isConnected: Boolean = true,
     displayDurationMs: Long = 5000L,
+    showGlow: Boolean = false,
     onAnimationComplete: () -> Unit
 ) {
     var animationState by remember { mutableStateOf(PopupAnimationState.HIDDEN) }
@@ -40,18 +40,20 @@ fun GamingPopup(
     LaunchedEffect(Unit) {
         animationState = PopupAnimationState.ENTERING
         delay(400)
-        animationState = PopupAnimationState.VISIBLE
+        if (animationState == PopupAnimationState.ENTERING) {
+            animationState = PopupAnimationState.VISIBLE
+        }
         delay((displayDurationMs - 700L).coerceAtLeast(0L))
-        animationState = PopupAnimationState.EXITING
-        delay(300)
-        animationState = PopupAnimationState.HIDDEN
-        onAnimationComplete()
+        if (animationState == PopupAnimationState.VISIBLE) {
+            animationState = PopupAnimationState.EXITING
+        }
     }
 
-    val haptic = LocalHapticFeedback.current
     LaunchedEffect(animationState) {
-        if (animationState == PopupAnimationState.VISIBLE) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (animationState == PopupAnimationState.EXITING) {
+            delay(300)
+            animationState = PopupAnimationState.HIDDEN
+            onAnimationComplete()
         }
     }
 
@@ -104,12 +106,23 @@ fun GamingPopup(
     )
     
     val bgColor = Color(0xFF121212) // Pitch black/dark grey
+    
+    val infiniteTransitionGlow = rememberInfiniteTransition(label = "glowAlpha")
+    val glowAlpha by infiniteTransitionGlow.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "glowAlpha"
+    )
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .wrapContentHeight()
             .safeDrawingPadding()
-            .padding(bottom = Dimensions.Padding.xlarge),
+            .padding(top = 64.dp, bottom = Dimensions.Padding.xlarge),
         contentAlignment = Alignment.BottomCenter
     ) {
         if (animationState != PopupAnimationState.HIDDEN) {
@@ -129,11 +142,18 @@ fun GamingPopup(
                         this.translationY = translationY
                         this.alpha = alpha
                     }
-                    .shadow(
-                        elevation = 32.dp,
-                        shape = RoundedCornerShape(12.dp),
-                        spotColor = Color.Cyan,
-                        ambientColor = Color.Magenta
+                    .then(
+                        if (showGlow) Modifier.glow(
+                            color = Color.Cyan,
+                            alpha = glowAlpha,
+                            borderRadius = 12.dp,
+                            glowRadius = 32.dp
+                        ) else Modifier.shadow(
+                            elevation = 32.dp,
+                            shape = RoundedCornerShape(12.dp),
+                            spotColor = Color.Cyan,
+                            ambientColor = Color.Magenta
+                        )
                     )
                     .clip(RoundedCornerShape(12.dp))
                     .background(bgColor)
@@ -171,7 +191,8 @@ fun GamingPopup(
                     PopupRightContent(
                         batteryLevel = batteryLevel,
                         textColor = Color.Magenta,
-                        arrowBgColor = Color.Magenta.copy(alpha = 0.1f)
+                        arrowBgColor = Color.Magenta.copy(alpha = 0.1f),
+                        isConnected = isConnected
                     )
                 }
             }

@@ -78,7 +78,11 @@ class GetBondedDevicesUseCase @Inject constructor(
                 )
             }
 
-            BluetoothListState.Success(uiModels)
+            val sortedModels = uiModels.sortedWith(
+                compareByDescending<ConnectAnyDeviceUiModel> { it.connectanyEnabled }
+                    .thenByDescending { it.connectionState == ConnectionState.CONNECTED }
+            )
+            BluetoothListState.Success(sortedModels)
         }
     }
 }

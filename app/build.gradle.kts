@@ -9,18 +9,19 @@ plugins {
 
 android {
     namespace = "com.example.connectany"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.example.connectany"
         minSdk = 29
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -42,9 +43,14 @@ android {
       }
     }
 
-    room {
-        schemaDirectory("$projectDir/schemas")
+    lint {
+      disable += "OldTargetApi"
+      disable += "TargetedApi"
     }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 kotlin {
@@ -54,7 +60,6 @@ kotlin {
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
-  androidTestImplementation(composeBom)
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
@@ -63,7 +68,6 @@ dependencies {
   implementation(libs.androidx.activity.compose)
 
   // Arch Components
-  implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
 
   // Compose
@@ -76,11 +80,11 @@ dependencies {
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-  // Local tests: jUnit, coroutines, Android runner
+  // Local tests: JUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
 
-  // Instrumented tests: jUnit rules and runners
+  // Instrumented tests: JUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
@@ -105,11 +109,10 @@ dependencies {
   implementation(libs.datastore.preferences)
 
   // Image Cropping, Loading & Animation
-  implementation("com.vanniktech:android-image-cropper:4.5.0")
-  implementation("io.coil-kt:coil-compose:2.6.0")
-  implementation("com.airbnb.android:lottie-compose:6.4.0")
+  implementation(libs.image.cropper)
+  implementation(libs.coil.compose)
+  implementation(libs.lottie.compose)
 
   // Glance Widgets
-  implementation("androidx.glance:glance-appwidget:1.1.0")
+  implementation(libs.glance.appwidget)
 }
-

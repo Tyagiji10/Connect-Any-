@@ -3,7 +3,9 @@ package com.example.connectany.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.connectany.data.local.dao.DeviceDao
+import com.example.connectany.data.local.dao.BatteryLogDao
 import com.example.connectany.data.local.entity.DeviceEntity
+import com.example.connectany.data.local.entity.BatteryLogEntity
 import com.example.connectany.data.settings.AppSettings
 import com.example.connectany.data.settings.SettingsRepository
 import com.example.connectany.data.settings.ThemeOption
@@ -29,6 +31,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val deviceDao: DeviceDao,
+    private val batteryLogDao: BatteryLogDao,
     private val getBondedDevicesUseCase: GetBondedDevicesUseCase,
     private val connectionStateMachine: ConnectionStateMachine
 ) : ViewModel() {
@@ -70,6 +73,10 @@ class MainViewModel @Inject constructor(
         return deviceDao.getDeviceByMac(macAddress)
     }
 
+    suspend fun getBatteryLogs(macAddress: String): List<BatteryLogEntity> {
+        return batteryLogDao.getLogsForDevice(macAddress)
+    }
+
     fun toggleDevice(device: ConnectAnyDeviceUiModel, isEnabled: Boolean) {
         viewModelScope.launch {
             val existing = deviceDao.getDeviceByMac(device.deviceKey)
@@ -93,7 +100,7 @@ class MainViewModel @Inject constructor(
 
     fun simulateConnection(device: ConnectAnyDeviceUiModel) {
         viewModelScope.launch {
-            connectionStateMachine.processEvent(
+            connectionStateMachine.forcePreview(
                 NormalizedConnectionEvent(
                     deviceIdentity = DeviceIdentity(
                         localId = device.deviceKey,
@@ -106,7 +113,7 @@ class MainViewModel @Inject constructor(
                     state = ConnectionState.CONNECTED,
                     timestampMs = System.currentTimeMillis(),
                     rawAddress = device.deviceKey,
-                    batteryLevel = 82 // Mock battery level for preview purposes
+                    batteryLevel = 82
                 )
             )
         }

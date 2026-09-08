@@ -1,5 +1,9 @@
 package com.example.connectany.presentation.popup
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -128,7 +132,8 @@ fun PopupMiddleContent(
 fun PopupRightContent(
     batteryLevel: Int?,
     textColor: Color,
-    arrowBgColor: Color
+    arrowBgColor: Color,
+    isConnected: Boolean = true
 ) {
     if (batteryLevel != null) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -169,16 +174,50 @@ fun PopupRightContent(
                     .background(arrowBgColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text("✓", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(if (isConnected) "✓" else "✗", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             
             Spacer(modifier = Modifier.height(4.dp))
             
             Text(
-                text = "Connected",
+                text = if (isConnected) "Connected" else "Disconnected",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
                 color = textColor
             )
         }
+    }
+}
+
+fun Modifier.glow(
+    color: Color,
+    alpha: Float = 0.5f,
+    borderRadius: androidx.compose.ui.unit.Dp = 0.dp,
+    glowRadius: androidx.compose.ui.unit.Dp = 20.dp,
+    offsetY: androidx.compose.ui.unit.Dp = 0.dp,
+    offsetX: androidx.compose.ui.unit.Dp = 0.dp
+) = this.drawBehind {
+    val transparentColor = android.graphics.Color.argb(0, 0, 0, 0)
+    val shadowColor = color.copy(alpha = alpha).toArgb()
+    
+    drawIntoCanvas { canvas ->
+        val paint = Paint()
+        val frameworkPaint = paint.asFrameworkPaint()
+        frameworkPaint.color = transparentColor
+        frameworkPaint.setShadowLayer(
+            glowRadius.toPx(),
+            offsetX.toPx(),
+            offsetY.toPx(),
+            shadowColor
+        )
+        
+        canvas.drawRoundRect(
+            0f,
+            0f,
+            size.width,
+            size.height,
+            borderRadius.toPx(),
+            borderRadius.toPx(),
+            paint
+        )
     }
 }

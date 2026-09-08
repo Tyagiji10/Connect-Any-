@@ -7,8 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Alignment
@@ -30,6 +29,7 @@ fun MinimalPopup(
     theme: PopupThemeColors,
     isConnected: Boolean = true,
     displayDurationMs: Long = 5000L,
+    showGlow: Boolean = false,
     onAnimationComplete: () -> Unit
 ) {
     var animationState by remember { mutableStateOf(PopupAnimationState.HIDDEN) }
@@ -37,18 +37,20 @@ fun MinimalPopup(
     LaunchedEffect(Unit) {
         animationState = PopupAnimationState.ENTERING
         delay(300)
-        animationState = PopupAnimationState.VISIBLE
+        if (animationState == PopupAnimationState.ENTERING) {
+            animationState = PopupAnimationState.VISIBLE
+        }
         delay((displayDurationMs - 600L).coerceAtLeast(0L))
-        animationState = PopupAnimationState.EXITING
-        delay(300)
-        animationState = PopupAnimationState.HIDDEN
-        onAnimationComplete()
+        if (animationState == PopupAnimationState.VISIBLE) {
+            animationState = PopupAnimationState.EXITING
+        }
     }
 
-    val haptic = LocalHapticFeedback.current
     LaunchedEffect(animationState) {
-        if (animationState == PopupAnimationState.VISIBLE) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (animationState == PopupAnimationState.EXITING) {
+            delay(300)
+            animationState = PopupAnimationState.HIDDEN
+            onAnimationComplete()
         }
     }
 
@@ -85,11 +87,22 @@ fun MinimalPopup(
     val bgColor = theme.dropBackground
     val contrastColor = bgColor.toContrastColor()
 
+    val infiniteTransition = rememberInfiniteTransition(label = "glowAlpha")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "glowAlpha"
+    )
+
     Box(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .wrapContentHeight()
             .safeDrawingPadding()
-            .padding(top = Dimensions.Padding.medium), // Top placement
+            .padding(top = Dimensions.Padding.medium, bottom = 64.dp), // Top placement
         contentAlignment = Alignment.TopCenter
     ) {
         if (animationState != PopupAnimationState.HIDDEN) {
@@ -108,9 +121,16 @@ fun MinimalPopup(
                         this.translationY = translationY
                         this.alpha = alpha
                     }
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = RoundedCornerShape(32.dp)
+                    .then(
+                        if (showGlow) Modifier.glow(
+                            color = bgColor,
+                            alpha = glowAlpha,
+                            borderRadius = 32.dp,
+                            glowRadius = 32.dp
+                        ) else Modifier.shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(32.dp)
+                        )
                     )
                     .clip(RoundedCornerShape(32.dp))
                     .background(bgColor)

@@ -72,7 +72,7 @@ class ConnectedDevicesWidget(
                             )
                             if (device.batteryLevel != null) {
                                 Text(
-                                    text = "${device.batteryLevel}%",
+                                    text = "🔋 ${device.batteryLevel}%",
                                     style = TextStyle(color = ColorProvider(Color(0xFF4CAF50)), fontWeight = FontWeight.Medium)
                                 )
                             } else {
